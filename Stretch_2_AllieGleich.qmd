@@ -1,0 +1,191 @@
+---
+title: "Stretch 2 - Allie Gleich"
+format: html
+editor: visual
+author: "Allie Gleich"
+format: 
+  pdf:
+    code-line-numbers: true
+execute: 
+  warning: false
+urlcolor: blue
+---
+
+1. Set Up
+
+The data for this model is taken from the 2022 Current Population Survey. Describe the data here. I will be using this model to predict household income based on how many years the subject has been in the United States. I expect to see that for immigrants, average household income increases the longer they have been in the country. The target variable is XXX based on years since immigration (YRIMMIG).
+
+```{r}
+#Load packages
+
+library(tidyverse)
+library(ipumsr)
+library(srvyr)
+library(haven)
+library(ggplot2)
+library(tune)
+library(lubridate)
+library(tidymodels)
+library(patchwork)
+library(stringr)
+library(dplyr)
+library(themis)
+library(parsnip)
+library(rsample)
+library(yardstick)
+library(vip)
+library(kknn)
+library(caret)
+```
+
+```{r}
+#Load in the CPS 2022 data from IPUMS
+ddi <- read_ipums_ddi("cps_00004_ddi.xml")
+cps <- read_ipums_micro(ddi)
+
+glimpse(cps)
+
+glimpse(cps$YRIMMIG)
+
+cps <- subset(cps, select = -YEAR)
+
+cps <- subset(cps, select = -HHINTYPE)
+
+#clean names with janitor
+
+cps <- cps %>%
+  janitor::clean_names()
+
+colnames(cps) <- tolower(colnames(cps))
+
+```
+
+
+
+```{r}
+#Split data into training and testing data
+
+set.seed(20231125)
+split <- initial_split(data = cps, strata = "yrimmig", prop = 0.8)
+
+
+cps_train <- training(x = split)
+cps_test <- testing(x = split)
+```
+
+
+
+```{r}
+#Uses data viz and other skills to perform exploratory data analysis on training data
+
+mean(cps_train$hhincome, na.rm = TRUE)
+
+mean(cps_train$hhincome[cps_train$yrimmig > 2000], na.rm = TRUE)
+
+mean(cps_train$hhincome[cps_train$yrimmig < 2000], na.rm = TRUE)
+
+
+cps_train_viz <- cps_train %>%
+  group_by(yrimmig, hhincome) %>%
+  summarise(frequency = n())
+
+cps_train_viz <- cps_train_viz %>%
+  filter(yrimmig > 1920) %>%
+  ggplot(aes(x = yrimmig, y = hhincome)) + geom_line() + theme_classic() + labs(
+
+    title = "Years Since Immigration's Impact on Household Income ",
+
+    x = "Years Since Immigration",
+
+    y = "Household Income",
+
+    caption = "Data from the Community Population Survey")
+
+
+print(cps_train_viz)
+```
+
+```{r}
+#explicitly pick an error metric
+```
+
+
+2.  Come up with Models
+
+```{r}
+# Create a recipe for the data
+
+cps_rec <- 
+  recipe(hhincome ~ ., data = cps_train) %>%
+  step_dummy(all_nominal_predictors()) %>% 
+  step_scale(all_numeric_predictors()) %>%
+  step_center(all_numeric_predictors()) %>%
+  step_zv(all_predictors()) %>%
+  step_log(hhincome, base = 10)
+  
+
+bake(prep(cps_rec, training = cps_train), new_data = cps_train)
+     
+     
+```
+
+
+```{r}
+# Set up v-fold cross validation with 10 folds to test the model further down
+
+set.seed(12032023)
+folds <- vfold_cv(data = cps_train, v = 10)
+folds
+
+```
+
+
+```{r}
+#linear regression model
+
+# create a linear regression model object with "lm" as the engine by modifying the line below
+lm_mod <- linear_reg() %>%
+  set_engine("lm")
+
+
+
+show_notes(.Last.tune.res)
+# create a workflow
+lm_wf <- workflow() %>%
+  add_recipe(cps_rec) %>%
+  add_model(lm_mod) 
+
+# fit the model by piping your workflow
+lm_cv <- lm_wf %>%
+  fit_resamples(resamples = folds)
+
+
+# select the best model based on the "rmse" metric
+lm_best <- lm_cv %>%
+  select_best(metric = "rmse")
+
+
+# use the finalize_workflow() function with your workflow and the best model 
+# to update (or "finalize") your workflow by modifying the line below
+lm_final <- finalize_workflow(
+  lm_wf,
+  parameters = lm_best
+)
+
+```
+
+```{_train)}
+
+```
+
+3.  Estimation
+
+```{r}
+
+```
+
+4.  Interpretation
+
+```{r}
+
+```
