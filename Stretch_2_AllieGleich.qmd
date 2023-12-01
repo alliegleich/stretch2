@@ -13,7 +13,7 @@ urlcolor: blue
 
 1. Set Up
 
-The data for this model is taken from the 2022 Current Population Survey. Describe the data here. I will be using this model to predict household income based on how many years the subject has been in the United States. I expect to see that for immigrants, average household income increases the longer they have been in the country. The target variable is XXX based on years since immigration (YRIMMIG).
+The data for this model is taken from the 2022 Current Population Survey. Describe the data here. I will be using this model to predict household income based on how many years the subject has been in the United States. I expect to see that for immigrants, average household income increases the longer they have been in the country. The target variable is household based on years since immigration (YRIMMIG). The prediction is that the models will reveal how an immigrant's livelihood may improve as time in America increases.
 
 ```{r}
 #Load packages
@@ -58,6 +58,11 @@ cps <- cps %>%
 
 colnames(cps) <- tolower(colnames(cps))
 
+cps <- cps[!is.na(cps$hhincome) & cps$hhincome != 0, ]
+
+
+cps <- cps[!is.na(cps$yrimmig) & cps$yrimmig != 0, ]
+
 ```
 
 
@@ -71,12 +76,16 @@ split <- initial_split(data = cps, strata = "yrimmig", prop = 0.8)
 
 cps_train <- training(x = split)
 cps_test <- testing(x = split)
+
+
 ```
 
 
 
 ```{r}
-#Uses data viz and other skills to perform exploratory data analysis on training data
+#Use data viz and other skills to perform exploratory data analysis on training data
+
+#Find how income compares for groups who immigrants before or after 2000
 
 mean(cps_train$hhincome, na.rm = TRUE)
 
@@ -84,14 +93,13 @@ mean(cps_train$hhincome[cps_train$yrimmig > 2000], na.rm = TRUE)
 
 mean(cps_train$hhincome[cps_train$yrimmig < 2000], na.rm = TRUE)
 
+# Visualize how 
 
 cps_train_viz <- cps_train %>%
-  group_by(yrimmig, hhincome) %>%
-  summarise(frequency = n())
-
-cps_train_viz <- cps_train_viz %>%
   filter(yrimmig > 1920) %>%
-  ggplot(aes(x = yrimmig, y = hhincome)) + geom_line() + theme_classic() + labs(
+  group_by(yrimmig, hhincome) %>%
+  summarise(frequency = n()) %>%
+  ggplot(aes(x = yrimmig, y = hhincome, size = frequency, color = as.factor(hhincome))) + geom_point() + theme_classic() + labs(
 
     title = "Years Since Immigration's Impact on Household Income ",
 
@@ -105,20 +113,18 @@ cps_train_viz <- cps_train_viz %>%
 print(cps_train_viz)
 ```
 
-```{r}
-#explicitly pick an error metric
-```
+My error selected term is the Root Mean Square Error (RMSE). An error in my model would incorrectly portray the hardships of new U.S. immigrants and potentially under estimate the increases in income immigrants may experience overtime. Because this is more of an investigative model and does not directly impact one's well being, I would say an error under 15% is acceptable. A false positive would be more costly because it would underplay the struggles of U.S. immigrants. An over prediction on income may falsely show some politicians that immigrants do not need any welfare assistance. An under prediction would just show the issue is worse and would not detrimental negative impacts.
 
 
 2.  Come up with Models
 
 ```{r}
-# Create a recipe for the data
+# Create a recipe for the models. Here the predictor is year since immigration (yrimmig) to predict household income (hhincome).
 
 cps_rec <- 
   recipe(hhincome ~ ., data = cps_train) %>%
   step_dummy(all_nominal_predictors()) %>% 
-  step_scale(all_numeric_predictors()) %>%
+  step_zv(all_numeric_predictors()) %>%
   step_center(all_numeric_predictors()) %>%
   step_zv(all_predictors()) %>%
   step_log(hhincome, base = 10)
@@ -141,15 +147,12 @@ folds
 
 
 ```{r}
-#linear regression model
+#First model: Linear Regression Model to predict household income based on immigration year.
 
-# create a linear regression model object with "lm" as the engine by modifying the line below
 lm_mod <- linear_reg() %>%
   set_engine("lm")
 
 
-
-show_notes(.Last.tune.res)
 # create a workflow
 lm_wf <- workflow() %>%
   add_recipe(cps_rec) %>%
@@ -174,15 +177,121 @@ lm_final <- finalize_workflow(
 
 ```
 
-```{_train)}
+```{r}
+    
+#Second model: Decision Tree Model to predict household income based on immigration year.
 
+library(broom)
+
+#create the model
+cps_tree_mod <- decision_tree() %>% 
+  set_engine("rpart") %>% 
+  set_mode(mode = "regression")
+
+
+# create a workflow
+cps_tree_wf <- workflow() %>%
+  add_recipe(cps_rec) %>%
+  add_model(cps_tree_mod) 
+
+
+#fit the model
+cps_tree_fit <- cps_tree_wf %>%
+  fit(data = cps_train)
+
+# resample equation
+get_tree_coefs <- function(x) {
+  
+  x %>% 
+extract_fit_engine() %>% 
+tidy()
+  }
+
+tree_tidy_ctrl <- control_grid(extract = get_tree_coefs, save_pred = TRUE)
+
+# fit refolds of model
+tree_cv <- cps_tree_wf %>%
+  fit_resamples(resamples = folds, control = tree_tidy_ctrl, metrics = metric_set(rmse))
+```
+
+```{r}
+
+#Third model: KNN to predict household income based on immigration year.
+
+# create the model
+ knn_mod <-
+  nearest_neighbor(neighbors = tune()) %>%
+  set_engine(engine = "kknn") %>%
+  set_mode(mode = "regression")
+
+# create a workflow
+ knn_wf <-
+ workflow() %>%
+ add_recipe(cps_rec) %>%
+ add_model(knn_mod) 
+ 
+#create a tuning grid
+ knn_grid <- grid_regular(neighbors(range = c(1, 20)), levels = 10)
+  
+
+# estimate models with resampling for each row of the tuning grid
+knn_res <-
+  knn_wf %>%
+  tune_grid(resamples = folds,
+  grid = knn_grid,
+  control = control_grid(save_pred = TRUE),
+  metrics = metric_set(rmse))
 ```
 
 3.  Estimation
 
 ```{r}
+#Calculate metrics
+
+knn_rsme_avg <- collect_metrics(knn_res,summarize = FALSE) %>% 
+  print()
+
+
+knn_rsme_avg_figure <- knn_rsme_avg %>%
+  summarise(mean_estimate = mean(.estimate))
+
+
+knn_res %>%
+  collect_metrics(knn_res, summarize = FALSE) %>% 
+  print()
+```
+
+
+```{r}
+# Out of sample error
+
+knn_res %>% show_best()
+
+knn_best <- knn_res %>%
+  select_best("rmse")
+
+#finalize workflow
+knn_final_wf <- 
+  knn_wf %>% 
+  finalize_workflow(knn_best)
+
+#final fit 
+knn_final_fit <- 
+  knn_final_wf %>%
+  last_fit(split)
+
+# RSME or Out of sample error rate
+knn_final_fit %>%
+  collect_metrics(knn_final, summarize = FALSE) %>% 
+  print()
+
+#collect predictions & show testing data predictions
+predictions <- 
+  knn_final_fit %>% 
+  collect_predictions()
 
 ```
+
 
 4.  Interpretation
 
