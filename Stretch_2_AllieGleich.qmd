@@ -91,13 +91,13 @@ mean(cps_train$hhincome[cps_train$yrimmig > 2000], na.rm = TRUE)
 
 mean(cps_train$hhincome[cps_train$yrimmig < 2000], na.rm = TRUE)
 
-# Visualize how 
+# Visualize how years in the U.S. impacts income
 
 cps_train_viz <- cps_train %>%
   filter(yrimmig > 1920) %>%
   group_by(yrimmig, hhincome) %>%
   summarise(frequency = n()) %>%
-  ggplot(aes(x = yrimmig, y = hhincome, size = frequency, color = as.factor(hhincome))) + geom_point() + theme_classic() + labs(
+  ggplot(aes(x = yrimmig, y = hhincome, size = frequency)) + geom_point() + theme_classic() + labs(
 
     title = "Years Since Immigration's Impact on Household Income ",
 
