@@ -1,14 +1,12 @@
 ---
-title: "Stretch 2 - Allie Gleich"
-format: html
-editor: visual
+title: "Data Science for Public Policy"
+subtitle: "Stretch Assignment 7"
 author: "Allie Gleich"
-format: 
-  pdf:
-    code-line-numbers: true
-execute: 
+execute:
   warning: false
-urlcolor: blue
+format:
+  html:
+    embed-resources: true
 ---
 
 1. Set Up
@@ -295,6 +293,7 @@ predictions <-
 
 4.  Interpretation
 
-```{r}
+a. The KNN model above has an RMSE of 0.411. This error metric represents how often the model strays from the actual values in the CPS dataset when predicting household income. This is a large RMSE and indicates that the model is not a great fit for the data. This may be the case because KNN is usually a better predictor when it comes to smaller datasets. My dataset may have been too large for this type of supervised machine learning to be successful. In the context of my specific study, on predicting income based on year of immigration, the model could have major implications if policymakers were using this as a guide to set policy. The model inaccurately portrays the income of immigrants and therefore, would skew any policy decisions based around immigrant welfare benefits, etc. 
 
-```
+b. To better my model I would focus on a linear regression model because I believe the relationship between years in the U.S. and income is linear in a positive direction. I could also try to model the data using cluster analysis to predict household income. The clusters would take into account other variables, such as education level, state/region, etc. to better predict income. Another addition I would make to my model is creating "household income bands" to group incomes into ranges. That will simplify the model and make it easier to predict. This would not impact the goal of the study because I am just looking to draw general conclusions on immigrant household income. Lastly, in my model I originally included data from people who immigrated from 1920 to present day. I should consider changing my lower bound year to 1960 to ensure that I am not accounting for elderly and retired persons, whose income would be low or 0. 
+
